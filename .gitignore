@@ -13,3 +13,4 @@
 **/*.pyzwz
 .env
 .DS_Store
+design_docs/
