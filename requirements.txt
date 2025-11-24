@@ -6,8 +6,8 @@ pyobjc-framework-Cocoa; sys_platform == 'darwin'
 
 # Vision & OCR  
 paddlepaddle==2.6.2  
-# FIX: Use 2.8.0+ which allows modern PyMuPDF (fixing the Mac install error)
-paddleocr>=2.8.0
+# FIX: Use 2.8.0 which allows modern PyMuPDF but should still support PaddlePaddle 2.6.2
+paddleocr==2.8.0
 # CRITICAL: Keep numpy < 2.0.0 (PaddlePaddle 2.6.2 crashes with Numpy 2.x)
 numpy<2.0.0
 # FIX: Explicitly request the modern PyMuPDF that has Mac ARM64 wheels
@@ -20,4 +20,5 @@ anthropic>=0.18.0
 pyyaml
 
 # Utilities  
-pillow  
+pillow
+pytest  
