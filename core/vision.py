@@ -57,28 +57,50 @@ class PerceptionEngine:
         self.ocr = OCRProcessor()
         self.scale_factor = get_scale_factor()
 
-    def find_element(self, image, target_text):
+    def scan_full(self, image):
         """
-        Scans the image for target_text and returns the LOGICAL center coordinates.
-        Returns: (x, y) tuple or None if not found.
+        Scans the full image and returns a list of ALL detected elements.
+        Each element is a dict: {'text': str, 'center': (log_x, log_y)}
         """
         raw_results = self.ocr.scan(image)
+        elements = []
 
         for line in raw_results:
             # line structure: [[ [x1,y1], [x2,y2], ... ], (text, confidence)]
             box = line[0]
             text = line[1][0]
 
-            # Case-insensitive fuzzy matching
-            if target_text.lower() in text.lower():
-                # 1. Calculate Center in Physical Pixels
-                # Box[0] is top-left, Box[2] is bottom-right
-                phys_center_x = (box[0][0] + box[2][0]) / 2
-                phys_center_y = (box[0][1] + box[2][1]) / 2
+            # Calculate Center in Physical Pixels
+            phys_center_x = (box[0][0] + box[2][0]) / 2
+            phys_center_y = (box[0][1] + box[2][1]) / 2
 
-                # 2. Normalize to Logical Points (The Retina Protocol)
-                log_x, log_y = to_logical(phys_center_x, phys_center_y, self.scale_factor)
+            # Normalize to Logical Points
+            log_x, log_y = to_logical(phys_center_x, phys_center_y, self.scale_factor)
 
-                return (log_x, log_y)
+            elements.append({
+                'text': text,
+                'center': (log_x, log_y)
+            })
 
+        return elements
+
+    def find_element_in_list(self, ui_elements, target_text):
+        """
+        Helper to look up coordinates in the already-scanned list.
+        Avoids re-running OCR.
+        """
+        for elem in ui_elements:
+            if target_text.lower() in elem['text'].lower():
+                return elem['center']
         return None
+
+    def find_element(self, image, target_text):
+        """
+        Legacy method: Scans image for specific text.
+        Now essentially a wrapper around scan_full + find_element_in_list, 
+        but kept for backward compatibility or specific checks.
+        """
+        # We could optimize this to stop at first match, 
+        # but scan_full is more useful for the Planner.
+        elements = self.scan_full(image)
+        return self.find_element_in_list(elements, target_text)
