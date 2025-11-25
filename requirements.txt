@@ -1,25 +1,25 @@
-# Core Automation  
-pyautogui==0.9.54  
-mss==9.0.1  
-pyobjc-framework-Quartz; sys_platform == 'darwin'  
+# Core Automation
+pyautogui==0.9.54
+mss==9.0.1
+pyobjc-framework-Quartz; sys_platform == 'darwin'
 pyobjc-framework-Cocoa; sys_platform == 'darwin'
 
-# Vision & OCR  
-paddlepaddle==2.6.2  
+# Vision & OCR
+paddlepaddle==2.6.2
 # FIX: Use 2.8.0 which allows modern PyMuPDF but should still support PaddlePaddle 2.6.2
 paddleocr==2.8.0
 # CRITICAL: Keep numpy < 2.0.0 (PaddlePaddle 2.6.2 crashes with Numpy 2.x)
 numpy<2.0.0
 # FIX: Explicitly request the modern PyMuPDF that has Mac ARM64 wheels
 PyMuPDF>=1.21.0
-opencv-python<=4.6.0.66  
+opencv-python<=4.6.0.66
 
-# AI & API  
-openai>=1.0.0  
-anthropic>=0.18.0  
+# AI & API
+openai>=1.0.0
+anthropic>=0.18.0
 pyyaml
 
-# Utilities  
+# Utilities
 pillow
-pytest  
-pillow  
+pytest
+pyttsx3

@@ -8,7 +8,8 @@ class TestIntegration(unittest.TestCase):
     @patch('core.brain.LLMClient')
     @patch('main.Eye')
     @patch('main.Hand')
-    def test_full_loop_mock(self, MockHand, MockEye, MockLLMClient):
+    @patch('main.Voice')
+    def test_full_loop_mock(self, MockVoice, MockHand, MockEye, MockLLMClient):
         """
         Simulates one full iteration of the Agent Loop without using real API or Screen.
         """
@@ -38,14 +39,14 @@ class TestIntegration(unittest.TestCase):
             # Motor Mock
             mock_hand = MockHand.return_value
             
+            # Voice Mock
+            mock_voice = MockVoice.return_value
+
             # 2. Initialize Agent
             agent = OmniAgent()
 
             # 3. Inject Mocks (Constructor already created real objects, we swap them)
             # Ideally we use dependency injection, but swapping works for this simple test.
-            # Wait, patch applied to the CLASS, so new instances inside OmniAgent are already Mocks!
-            # Except PerceptionEngine which we didn't patch at class level in the decorator list above.
-            # We patched 'scan_full' method of PerceptionEngine.
             
             # 4. Run a single "step" of the loop manually to avoid infinite while loop
             # We can verify the execute_plan logic directly.
@@ -59,7 +60,7 @@ class TestIntegration(unittest.TestCase):
             plan = agent.brain.decide_next_step(user_goal, ui_elements)
             
             # Step C: Act
-            agent.execute_plan(plan, ui_elements)
+            agent.execute_plan(plan, ui_elements, screenshot)
 
             # 5. Assertions
             # Did we ask the brain?

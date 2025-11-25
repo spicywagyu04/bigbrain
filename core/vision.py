@@ -3,7 +3,16 @@ import numpy as np
 import cv2
 from paddleocr import PaddleOCR
 import logging
+import base64
+import json
 from core.retina import get_scale_factor, to_logical
+# Import LLMClient for VLM fallback. 
+# Note: This creates a dependency on core.brain, ensuring core.brain doesn't import core.vision to avoid cycles.
+try:
+    from core.brain import LLMClient
+except ImportError:
+    # Handle case where core.brain might not be fully set up or circular import issues during refactors
+    LLMClient = None
 
 # Suppress verbose logging from Paddle
 logging.getLogger("ppocr").setLevel(logging.ERROR)
@@ -56,6 +65,15 @@ class PerceptionEngine:
     def __init__(self):
         self.ocr = OCRProcessor()
         self.scale_factor = get_scale_factor()
+        self.llm_client = None
+
+    def get_llm_client(self):
+        if not self.llm_client and LLMClient:
+            try:
+                self.llm_client = LLMClient()
+            except Exception as e:
+                print(f"Vision Warning: Could not init LLM for VLM tasks: {e}")
+        return self.llm_client
 
     def scan_full(self, image):
         """
@@ -104,3 +122,95 @@ class PerceptionEngine:
         # but scan_full is more useful for the Planner.
         elements = self.scan_full(image)
         return self.find_element_in_list(elements, target_text)
+
+    def calculate_diff(self, img1, img2):
+        """
+        Calculates the Mean Squared Error (MSE) equivalent or pixel change ratio between two images.
+        Returns a change ratio (0.0 to 1.0).
+        """
+        if img1 is None or img2 is None:
+            return 0.0
+        
+        # Ensure same size
+        if img1.shape != img2.shape:
+            # Resize img2 to match img1 if dimensions differ (unlikely with same screen capture)
+            img2 = cv2.resize(img2, (img1.shape[1], img1.shape[0]))
+
+        # Convert to grayscale to save processing
+        gray1 = cv2.cvtColor(img1, cv2.COLOR_BGR2GRAY)
+        gray2 = cv2.cvtColor(img2, cv2.COLOR_BGR2GRAY)
+
+        # Simple subtraction
+        diff = cv2.absdiff(gray1, gray2)
+        
+        # Count non-zero pixels (pixels that changed)
+        # We can use a threshold to ignore minor noise
+        _, diff_thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+        non_zero_count = np.count_nonzero(diff_thresh)
+
+        total_pixels = gray1.shape[0] * gray1.shape[1]
+        change_ratio = non_zero_count / total_pixels
+
+        return change_ratio
+
+    def estimate_coordinates_with_vlm(self, image, target_description):
+        """
+        Fallback: Asks GPT-4o Vision where the target is.
+        Returns logical (x, y) or None.
+        """
+        client = self.get_llm_client()
+        if not client:
+            print("❌ VLM Error: No LLM Client available.")
+            return None
+
+        # Encode image to base64
+        _, buffer = cv2.imencode('.jpg', image)
+        base64_image = base64.b64encode(buffer).decode('utf-8')
+        
+        height, width = image.shape[:2]
+
+        prompt = f"""
+        Look at this screenshot. I need to click on '{target_description}'.
+        Estimate the (x, y) coordinates of the center of this element.
+        The image size is {width}x{height} (Physical Pixels).
+        
+        IMPORTANT: 
+        - Analyze the visual layout to find the icon or element matching '{target_description}'.
+        - Output ONLY valid JSON in this format: {{"x": 123, "y": 456}}
+        - Do not output markdown blocks.
+        """
+
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}",
+                            "detail": "high"
+                        }
+                    }
+                ]
+            }
+        ]
+
+        response_text = client.query(messages)
+        if not response_text:
+            return None
+        
+        try:
+            data = json.loads(response_text)
+            phys_x = data.get("x")
+            phys_y = data.get("y")
+            
+            if phys_x is not None and phys_y is not None:
+                # GPT sees the image in its native resolution (Physical Pixels for Retina screenshot)
+                # We need to convert these physical pixels back to logical points for the mouse.
+                return to_logical(phys_x, phys_y, self.scale_factor)
+                
+        except json.JSONDecodeError:
+            print(f"❌ VLM Error: Could not parse JSON from {response_text}")
+            
+        return None
