@@ -16,6 +16,7 @@ class TestIntegration(unittest.TestCase):
         # 1. Setup Mocks
         # Brain Mock
         mock_llm = MockLLMClient.return_value
+        # Simulate Tool Call response (which comes back as a JSON string of arguments)
         mock_llm.query.return_value = json.dumps({
             "thought": "I see the File menu. I will click it.",
             "action": "click",
@@ -28,8 +29,6 @@ class TestIntegration(unittest.TestCase):
         mock_eye.capture.return_value = "dummy_image_array"
 
         # Vision Mock (The OCR Engine inside Perception)
-        # We need to patch the PerceptionEngine's scan_full method directly 
-        # because it does heavy lifting we want to bypass.
         with patch('core.vision.PerceptionEngine.scan_full') as mock_scan:
             mock_scan.return_value = [
                 {'text': 'File', 'center': (100, 20)},
@@ -46,10 +45,8 @@ class TestIntegration(unittest.TestCase):
             agent = OmniAgent()
 
             # 3. Inject Mocks (Constructor already created real objects, we swap them)
-            # Ideally we use dependency injection, but swapping works for this simple test.
             
-            # 4. Run a single "step" of the loop manually to avoid infinite while loop
-            # We can verify the execute_plan logic directly.
+            # 4. Run a single "step" of the loop manually
             
             # Step A: Observe
             screenshot = agent.eye.capture()
